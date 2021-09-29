@@ -268,6 +268,7 @@ public final class Metadata {
         }
 
         // The bootstrap cluster is guaranteed not to have any useful information
+        // isBootstrapConfigured 默认是true
         if (!cluster.isBootstrapConfigured()) {
             String clusterId = cluster.clusterResource().clusterId();
             if (clusterId == null ? previousClusterId != null : !clusterId.equals(previousClusterId))
