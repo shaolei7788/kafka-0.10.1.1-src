@@ -68,8 +68,6 @@ public class Producer {
     //发送消息的三种方式 : 发后即忘,同步,异步
     //send()方法有两种重载方式,其本身就是异步的,如果想要实现同步,可以利用send()方法返回的Future对象实现
     public void produce() {
-
-
         //定义一个变量
         int messageNo = 1;
         // 一直往kafka发送数据
@@ -83,7 +81,7 @@ public class Producer {
             // 2. 同步发送
             // isAsync true的时候是异步发送 false的时候是同步发送
             if (isAsync) { // Send asynchronously
-                //异步发送 , 一直发送,消息响应结果交给回调函数处理
+                //todo 异步发送 , 一直发送,消息响应结果交给回调函数处理
                 //这样做的好处,性能比较好,我们的生产环境就用这种方式
                 //在send()方法里构建消息对象ProducerRecord,topic和value是必填项
                 //回调函数的作用,判断有没有异常,如果有异常,分为2种情况: 1.不可重试异常,直接返回异常到客户端,再进行处理;2.可以重试异常,重新加入缓存里面,再发送出去

@@ -53,7 +53,8 @@ public final class RecordAccumulator {
     private final AtomicInteger flushesInProgress;
     private final AtomicInteger appendsInProgress;
     private final int batchSize;
-    private final CompressionType compression;//使用的压缩类型
+    //使用的压缩类型
+    private final CompressionType compression;
     private final long lingerMs;
     //重试时间的间隔
     private final long retryBackoffMs;
@@ -160,7 +161,7 @@ public final class RecordAccumulator {
                                      long maxTimeToBlock) throws InterruptedException {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
-        //跟踪附加线程的数量，以确保不会错过批处理
+        // 跟踪附加线程的数量，以确保不会错过批处理
         appendsInProgress.incrementAndGet();
         try {
             // check if we have an in-progress batch
@@ -186,7 +187,8 @@ public final class RecordAccumulator {
              * 这儿会创建出来一个空的队列
              */
             Deque<RecordBatch> dq = getOrCreateDeque(tp);//根据消息的主题和分区信息,去获取到消息要发往的队列
-            synchronized (dq) {//分段加锁,目的是缩小锁的粒度,因为锁与锁之间还有其他的业务
+            //todo 分段加锁,目的是缩小锁的粒度,因为锁与锁之间还有其他的业务
+            synchronized (dq) {
                 //首先进来的是第一个线程
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
@@ -207,9 +209,10 @@ public final class RecordAccumulator {
             // 申请创建批次对象
             /**
              * 步骤三: 计算一个RecordBatch批次的大小
-             * 执行到这里,说明上一步插入批次失败,因为batches里面没有该消息的主题分区号对应的Deque<RecordBatch>,那么就需要创建一个批次消息队列,
-             * 首先就是计算一个批次RecordBatch的大小
+             * 执行到这里,说明上一步插入批次失败,因为batches里面没有该消息的主题分区号对应的Deque<RecordBatch>,
+             * 那么就需要创建一个批次消息队列,首先就是计算一个批次RecordBatch的大小
              * 在消息的大小和批次的大小之间取一个最大值,用这个值作为当前批次的大小
+             * 如果该消息大于16k，会立即发送出去
              */
             int size = Math.max(this.batchSize, Records.LOG_OVERHEAD + Record.recordSize(key, value));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
@@ -231,13 +234,12 @@ public final class RecordAccumulator {
                 RecordAppendResult appendResult = tryAppend(timestamp, key, value, callback, dq);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
-                    //
+                    //todo 释放内存
                     free.deallocate(buffer);
                     return appendResult;
                 }
                 /**
                  * 步骤六: 根据内存大小封装批次
-                 *
                  *      第一次执行到这里,会创建一个批次对象,那么其他线程也可以写数据进去了
                  */
                 MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
@@ -245,8 +247,7 @@ public final class RecordAccumulator {
                 //尝试往里面写数据,是可以执行成功的
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
                 /**
-                 * 步骤七:
-                 *      将写有数据的批次对象RecordBatch放入队列的队尾
+                 * 步骤七: 将写有数据的批次对象RecordBatch放入队列的队尾
                  */
                 dq.addLast(batch);
                 incomplete.add(batch);

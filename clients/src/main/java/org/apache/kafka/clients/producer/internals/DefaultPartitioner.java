@@ -64,10 +64,10 @@ public class DefaultPartitioner implements Partitioner {
             //获取主题中可用的分区
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             if (availablePartitions.size() > 0) {
-                //计算消息发送到哪个分区
-                //实现一个轮询的效果,达到消息的负载均衡
+                //todo 计算消息发送到哪个分区  toPositive 变成正数
+                // 实现一个轮询的效果,达到消息的负载均衡
                 int part = Utils.toPositive(nextValue) % availablePartitions.size();
-                //根据取模的值分配分区
+                // 根据取模的值分配分区
                 return availablePartitions.get(part).partition();
             } else {
                 // no partitions are available, give a non-available partition

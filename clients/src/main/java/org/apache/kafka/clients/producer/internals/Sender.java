@@ -120,7 +120,6 @@ public class Sender implements Runnable {
      */
     public void run() {
         log.debug("Starting Kafka producer I/O thread.");
-
         // main loop, runs until close is called
         //running = true,这是一个死循环,
         //所以我们要知道sender线程启动之后会一直运行
@@ -168,7 +167,6 @@ public class Sender implements Runnable {
      */
     void run(long now) {
         /**
-         *
          * (1).代码第一次运行到这里
          *      第一次进来的时候cluster里面是没有元数据的
          *      接下来的代码都会依赖元数据,所以后面的代码都不会执行
@@ -189,9 +187,7 @@ public class Sender implements Runnable {
          * 步骤二: 首先判断哪些batches<TopicPartion,Dqueue<RecordBatch>>可以发送,
          *          (换句话说,我们需要知道一个批次可以发送出去的条件)
          *      获取到这个partition的leader partition对应的broker主机(根据元数据来就行了)
-         *
          *      kafka发送消息的时候,会把消息发送到leader partition上面
-         *
          *      哪些broker上面需要我们去发送消息
          */
         // get the list of partitions with data ready to send

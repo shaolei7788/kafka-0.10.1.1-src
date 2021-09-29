@@ -300,9 +300,7 @@ public class NetworkClient implements KafkaClient {
         //步骤三: 处理响应,响应里面就会有我们需要的元数据
         /**
          * kafka获取元数据的流程跟发送消息的流程是一模一样的
-         *
          * 获取元数据--> 判断网络连接是否建立好--> 建立网络连接--> 发送请求(获取元数据的请求)--> 服务端发送回来响应
-         *
          */
         handleCompletedReceives(responses, updatedNow);
         //处理断开的连接
@@ -681,6 +679,7 @@ public class NetworkClient implements KafkaClient {
                 //更新元数据信息
                 this.metadata.update(cluster, now);
             } else {
+                //更新失败
                 log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
                 this.metadata.failedUpdate(now);
             }

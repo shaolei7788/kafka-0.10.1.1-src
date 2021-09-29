@@ -524,9 +524,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // first make sure the metadata for the topic is available
             // 首先确保主题的元数据可用
             /**
-             * 步骤一:
-             *      同步等待拉取元数据
-             *      maxBlockTimeMs : 最大的等待时间
+             * 步骤一: 同步等待拉取元数据  maxBlockTimeMs : 最大的等待时间 60s
              */
             ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
             //clusterAndWaitTime.waitedOnMetadataMs 拉取元数据所用的时间
@@ -569,8 +567,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             //验证记录大小是否过大
             ensureValidRecordSize(serializedSize);
             /**
-             * 步骤五:
-             *      获取到了元数据,也计算出来了分区号,就可以创建一个封装分区的对象
+             * 步骤五: 获取到了元数据,也计算出来了分区号,就可以创建一个封装分区的对象
              */
             tp = new TopicPartition(record.topic(), partition);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
@@ -579,7 +576,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // producer callback将确保同时调用'callback'和interceptor callback
             /**
              *  步骤六:
-             *
              *      给每一条消息都绑定它的回调函数,因为我们使用的是异步的方式发送消息
              *      如果发送出去的消息有返回响应,就会调用回调函数
              *      此处是给消息绑定回调函数
@@ -956,7 +952,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 partition :
                 //没有分区号的时候,使用分区器进行选择合适的分区
                 partitioner.partition(
-                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+                        record.topic(),
+                        record.key(), serializedKey,
+                        record.value(), serializedValue, cluster);
     }
 
     private static class ClusterAndWaitTime {

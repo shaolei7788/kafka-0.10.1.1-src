@@ -41,12 +41,14 @@ public final class RecordBatch {
     public long drainedMs;
     //上一次重试的时间
     public long lastAttemptMs;
+    //实际的存储
     public final MemoryRecords records;
     public final TopicPartition topicPartition;
     public final ProduceRequestResult produceFuture;
     public long lastAppendTime;
     private final List<Thunk> thunks;
     private long offsetCounter = 0L;
+
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
         this.createdMs = now;
         this.lastAttemptMs = now;
