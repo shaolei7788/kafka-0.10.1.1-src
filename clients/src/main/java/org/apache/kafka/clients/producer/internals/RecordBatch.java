@@ -100,13 +100,14 @@ public final class RecordBatch {
                   exception);
         // execute callbacks
         /**
-         * 我们发送数据的时候,一条消息就代表一个thunk
+         * 我们发送数据的时候,一条消息就代表一个thunk (有回调函数的才加到thunks集合里)
          * 遍历我们所有发出去的消息
+         * this = batch RecordBatch类型 一个batch属于同一个分区
          */
         for (int i = 0; i < this.thunks.size(); i++) {
             try {
                 Thunk thunk = this.thunks.get(i);
-                //exception == null代表响应里面没有异常
+                //todo exception == null代表响应里面没有异常
                 if (exception == null) {
                     // If the timestamp returned by server is NoTimestamp, that means CreateTime is used. Otherwise LogAppendTime is used.
                     RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset(),
@@ -165,22 +166,22 @@ public final class RecordBatch {
             expire = true;
             //记录异常信息
             errorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
+        } else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs))) {
             /**
              * lingerMs: 100ms,无论如何都要把消息发送出去的时间
              * createdMs: 创建批次的时间
-             *
              * 已经大于30s了,说明也是超时了
              */
-        } else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs))) {
             expire = true;
             errorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation plus linger time";
+
+        } else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs))) {
             /**
              *  针对重试:
              *   lastAttemptMs: 上次重试的时间(批次创建的时间)
              *   retryBackoffMs: 重试的时间间隔
              *   说明也超时了
              */
-        } else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs))) {
             expire = true;
             errorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
         }

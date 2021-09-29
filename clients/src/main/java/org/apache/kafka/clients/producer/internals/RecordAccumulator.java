@@ -307,7 +307,7 @@ public final class RecordAccumulator {
                         RecordBatch batch = batchIterator.next();
                         boolean isFull = batch != lastBatch || batch.records.isFull();
                         // check if the batch is expired
-                        //判断是否超时
+                        //todo 判断是否超时
                         if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
                             //增加到超时的数据结构里面
                             expiredBatches.add(batch);
@@ -376,13 +376,13 @@ public final class RecordAccumulator {
         //点进queued()方法里面,会发现其实是在获取waiters的大小
         //当waiters里面有数据的时候(exhausted是true),说明我们的内存池的内存已经不够了
         boolean exhausted = this.free.queued() > 0;
-        //遍历batches,TopicPartition  Deque<RecordBatch>,判断RecordBatch是否符合发送条件
+        //todo 遍历batches,key=TopicPartition  value=Deque<RecordBatch>,判断RecordBatch是否符合发送条件
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             //获取到分区
             TopicPartition part = entry.getKey();
             //获取到分区对应的消息队列
             Deque<RecordBatch> deque = entry.getValue();
-            //获取到该分区的leader partition所在的节点
+            //todo 获取到该分区的leader partition所在的节点
             Node leader = cluster.leaderFor(part);
             synchronized (deque) {
                 //如果没有找到对应的主机,将其添加到unknownLeaderTopics列表中
@@ -400,11 +400,10 @@ public final class RecordAccumulator {
                          * 接下来就是判断符合发送的条件
                          * 当一个批次没有被写满,但是到了一定的时间间隔,还是会被发送出去的,默认值是100ms
                          */
-
                         /**
                          * batch.attempts : 重试的次数
                          * batch.lastAttemptMs : 上一次重试的时间
-                         * retryBackoffMs 重试的时间间隔
+                         * retryBackoffMs 100ms 重试的时间间隔
                          * backingOff : 重新发送数据的时间是否到了
                          */
                         boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > nowMs;
@@ -453,7 +452,7 @@ public final class RecordAccumulator {
                          * closed || flushInProgress() : 当生产者要退出的时候,需要把内存中的所有数据发送出去
                          */
                         boolean sendable = full || expired || exhausted || closed || flushInProgress();
-                        //可以发送消息了
+                        //可以发送消息了  backingOff=重新发送数据的时间是否到了
                         if (sendable && !backingOff) {
                             //把可以发送批次的分区对应的leader分区所在的主机放入readyNodes
                             readyNodes.add(leader);

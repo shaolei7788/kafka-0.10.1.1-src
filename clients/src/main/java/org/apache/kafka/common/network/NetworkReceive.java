@@ -88,6 +88,7 @@ public class NetworkReceive implements Receive {
             //一直到size用完为止
             if (!size.hasRemaining()) {
                 size.rewind();
+                //数据大小
                 int receiveSize = size.getInt();
                 if (receiveSize < 0)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + ")");

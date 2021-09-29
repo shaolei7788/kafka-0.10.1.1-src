@@ -17,8 +17,6 @@
 
 package kafka.api
 
-import kafka.message.Message
-
 /**
  * This class contains the different Kafka versions.
  * Right now, we use them for upgrades - users can configure the version of the API brokers will use to communicate between themselves.

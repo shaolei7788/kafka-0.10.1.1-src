@@ -19,12 +19,6 @@ package kafka.api
 
 import java.nio.ByteBuffer
 
-import kafka.api.ApiUtils._
-import kafka.common.TopicAndPartition
-import kafka.network.{RequestOrResponseSend, RequestChannel}
-import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-
 
 object OffsetRequest {
   val CurrentVersion = 0.shortValue

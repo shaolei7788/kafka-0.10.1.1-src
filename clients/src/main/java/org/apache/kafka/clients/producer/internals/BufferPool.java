@@ -43,9 +43,11 @@ import org.apache.kafka.common.utils.Time;
  */
 public final class BufferPool {
 
+    //总内存大小 默认32m
     private final long totalMemory;
     //一个批次的大小,默认是16K
     private final int poolableSize;
+
     private final ReentrantLock lock;
     //内存池就是一个队列,队列里面放的就是一块块的内存
     //就是跟连接池是一个道理

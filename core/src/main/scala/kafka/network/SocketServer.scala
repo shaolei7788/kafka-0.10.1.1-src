@@ -88,13 +88,18 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       var processorBeginIndex = 0
       endpoints.values.foreach { endpoint =>
         val protocol = endpoint.protocolType
+        //默认是3
         val processorEndIndex = processorBeginIndex + numProcessorThreads
 
-        for (i <- processorBeginIndex until processorEndIndex)
+        for (i <- processorBeginIndex until processorEndIndex) {
+          //processors是Processor数组 Processor是线程
           processors(i) = newProcessor(i, connectionQuotas, protocol)
-
+        }
+        //acceptor 是一个线程
         val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId,
           processors.slice(processorBeginIndex, processorEndIndex), connectionQuotas)
+
+        //acceptors 是一个Map
         acceptors.put(endpoint, acceptor)
         Utils.newThread("kafka-socket-acceptor-%s-%d".format(protocol.toString, endpoint.port), acceptor, false).start()
         acceptor.awaitStartup()
@@ -251,6 +256,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
    * Accept loop that checks for new connection attempts
    */
   def run() {
+    //serverChannel注册到nioSelector 绑定OP_ACCEPT 事件
     serverChannel.register(nioSelector, SelectionKey.OP_ACCEPT)
     startupComplete()
     try {
@@ -261,13 +267,15 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
           if (ready > 0) {
             val keys = nioSelector.selectedKeys()
             val iter = keys.iterator()
+            //循环
             while (iter.hasNext && isRunning) {
               try {
                 val key = iter.next
                 iter.remove()
-                if (key.isAcceptable)
+                if (key.isAcceptable) {
+                  //processors轮询处理
                   accept(key, processors(currentProcessor))
-                else
+                } else
                   throw new IllegalStateException("Unrecognized key state for acceptor thread.")
 
                 // round robin to the next processor thread
@@ -336,7 +344,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
             .format(socketChannel.socket.getRemoteSocketAddress, socketChannel.socket.getLocalSocketAddress, processor.id,
                   socketChannel.socket.getSendBufferSize, sendBufferSize,
                   socketChannel.socket.getReceiveBufferSize, recvBufferSize))
-
+      //todo processor处理socketChannel
       processor.accept(socketChannel)
     } catch {
       case e: TooManyConnectionsException =>
@@ -405,6 +413,7 @@ private[kafka] class Processor(val id: Int,
     false,
     ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs, null, true))
 
+  //todo
   override def run() {
     startupComplete()
     while (isRunning) {
@@ -413,9 +422,13 @@ private[kafka] class Processor(val id: Int,
         configureNewConnections()
         // register any new responses for writing
         processNewResponses()
+        //todo 读取和发送请求
         poll()
+        //todo 处理接收到的请求
         processCompletedReceives()
+        //todo 处理已经发送出去的响应
         processCompletedSends()
+        //todo 处理失联
         processDisconnected()
       } catch {
         // We catch all the throwables here to prevent the processor thread from exiting. We do this because
@@ -489,8 +502,11 @@ private[kafka] class Processor(val id: Int,
         val channel = selector.channel(receive.source)
         val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
           channel.socketAddress)
+        //解析请求 req = RequestChannel.Request
         val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
+        //todo 把req 请求放入requestQueue阻塞队列
         requestChannel.sendRequest(req)
+        //取消读事件
         selector.mute(receive.source)
       } catch {
         case e @ (_: InvalidRequestException | _: SchemaException) =>
