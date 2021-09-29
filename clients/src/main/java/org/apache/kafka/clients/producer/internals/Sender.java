@@ -178,7 +178,6 @@ public class Sender implements Runnable {
          *  步骤一: 获取元数据
          *
          */
-
         //获取元数据
         //当代码第一次运行到这里的时候,其实是没有元数据的,只是返回了cluster对象
         //cluster对象里面没有元数据,接下来的代码都不会执行
