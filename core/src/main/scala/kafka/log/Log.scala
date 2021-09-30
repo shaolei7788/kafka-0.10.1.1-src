@@ -337,7 +337,8 @@ class Log(val dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   def append(messages: ByteBufferMessageSet, assignOffsets: Boolean = true): LogAppendInfo = {
-    val appendInfo = analyzeAndValidateMessageSet(messages)
+    //todo 1 解析校验参数
+    val appendInfo : LogAppendInfo = analyzeAndValidateMessageSet(messages)
 
     // if we have any valid messages, append them to the log
     if (appendInfo.shallowCount == 0)
@@ -417,7 +418,6 @@ class Log(val dir: File,
 
         if (unflushedMessages >= config.flushInterval)
           flush()
-
         appendInfo
       }
     } catch {

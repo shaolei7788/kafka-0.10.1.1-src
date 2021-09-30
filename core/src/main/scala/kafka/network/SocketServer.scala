@@ -95,12 +95,13 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
           //processors是Processor数组 Processor是线程
           processors(i) = newProcessor(i, connectionQuotas, protocol)
         }
-        //acceptor 是一个线程
+        //todo acceptor 是一个线程
         val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId,
-          processors.slice(processorBeginIndex, processorEndIndex), connectionQuotas)
+               processors.slice(processorBeginIndex, processorEndIndex), connectionQuotas)
 
-        //acceptors 是一个Map
+        //todo acceptors 是一个Map endpoint = kafka实例
         acceptors.put(endpoint, acceptor)
+        //直接启动线程
         Utils.newThread("kafka-socket-acceptor-%s-%d".format(protocol.toString, endpoint.port), acceptor, false).start()
         acceptor.awaitStartup()
 
@@ -263,8 +264,10 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       var currentProcessor = 0
       while (isRunning) {
         try {
+          //每隔500ms获取注册key的个数
           val ready = nioSelector.select(500)
           if (ready > 0) {
+            //获取注册的key
             val keys = nioSelector.selectedKeys()
             val iter = keys.iterator()
             //循环
@@ -273,7 +276,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
                 val key = iter.next
                 iter.remove()
                 if (key.isAcceptable) {
-                  //processors轮询处理
+                  //todo processors轮询处理
                   accept(key, processors(currentProcessor))
                 } else
                   throw new IllegalStateException("Unrecognized key state for acceptor thread.")
@@ -451,6 +454,7 @@ private[kafka] class Processor(val id: Int,
     while (curr != null) {
       try {
         curr.responseAction match {
+          //acks=0 不需要返回响应给客户端，内部再次绑定OP_READ事件，接收客户端请求
           case RequestChannel.NoOpAction =>
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
@@ -458,6 +462,7 @@ private[kafka] class Processor(val id: Int,
             trace("Socket server received empty response to send, registering for read: " + curr)
             selector.unmute(curr.request.connectionId)
           case RequestChannel.SendAction =>
+            //todo
             sendResponse(curr)
           case RequestChannel.CloseConnectionAction =>
             curr.request.updateRequestMetrics

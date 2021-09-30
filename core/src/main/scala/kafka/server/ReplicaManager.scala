@@ -319,18 +319,21 @@ class ReplicaManager(val config: KafkaConfig,
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied
    */
-  def appendMessages(timeout: Long,
-                     requiredAcks: Short,
-                     internalTopicsAllowed: Boolean,
-                     messagesPerPartition: Map[TopicPartition, MessageSet],
+  def appendMessages(timeout: Long,//请求超时时间
+                     requiredAcks: Short,//acks
+                     internalTopicsAllowed: Boolean,//是否允许写入主题
+                     messagesPerPartition: Map[TopicPartition, MessageSet],//待写入消息
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
-
+    //todo 判断acks参数是否合法，-1，0，1
     if (isValidRequiredAcks(requiredAcks)) {
+      //acks合法
+      //当前时间
       val sTime = SystemTime.milliseconds
+      //todo 调用appendToLocalLog方法写入消息到本地日志
       val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
-
-      val produceStatus = localProduceResults.map { case (topicPartition, result) =>
+      //todo 根据写日返回的结果，封装返回给客户端
+      val produceStatus : Map[TopicPartition, ProducePartitionStatus] = localProduceResults.map { case (topicPartition, result) =>
         topicPartition ->
                 ProducePartitionStatus(
                   result.info.lastOffset + 1, // required offset
@@ -356,6 +359,7 @@ class ReplicaManager(val config: KafkaConfig,
         responseCallback(produceResponseStatus)
       }
     } else {
+      //todo acks参数不合法
       // If required.acks is outside accepted range, something is wrong with the client
       // Just return an error and don't handle the request at all
       val responseStatus = messagesPerPartition.map {
@@ -390,20 +394,25 @@ class ReplicaManager(val config: KafkaConfig,
                                messagesPerPartition: Map[TopicPartition, MessageSet],
                                requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
     trace("Append [%s] to local log ".format(messagesPerPartition))
+    //遍历每个分区
     messagesPerPartition.map { case (topicPartition, messages) =>
       BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).totalProduceRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalProduceRequestRate.mark()
 
       // reject appending to internal topics if it is not allowed
       if (Topic.isInternal(topicPartition.topic) && !internalTopicsAllowed) {
+        //todo 是内部topic topic= __consumer_offsets
         (topicPartition, LogAppendResult(
           LogAppendInfo.UnknownLogAppendInfo,
           Some(new InvalidTopicException("Cannot append to internal topic %s".format(topicPartition.topic)))))
       } else {
+        //不是内部分区 就是我们自己创建的分区
         try {
-          val partitionOpt = getPartition(topicPartition.topic, topicPartition.partition)
+          //获取对应的分区对象
+          val partitionOpt : Option[Partition] = getPartition(topicPartition.topic, topicPartition.partition)
           val info = partitionOpt match {
             case Some(partition) =>
+              //todo 向该leader分区对象写入消息集合
               partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet], requiredAcks)
             case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
               .format(topicPartition, localBrokerId))
@@ -423,6 +432,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
             .format(messages.sizeInBytes, topicPartition.topic, topicPartition.partition, info.firstOffset, info.lastOffset))
+          //todo 返回每个分区写入的消息结果
           (topicPartition, LogAppendResult(info))
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
@@ -431,6 +441,7 @@ class ReplicaManager(val config: KafkaConfig,
             fatal("Halting due to unrecoverable I/O error while handling produce request: ", e)
             Runtime.getRuntime.halt(1)
             (topicPartition, null)
+          //找不到topic 分区对应的partiton对象
           case e@ (_: UnknownTopicOrPartitionException |
                    _: NotLeaderForPartitionException |
                    _: RecordTooLargeException |

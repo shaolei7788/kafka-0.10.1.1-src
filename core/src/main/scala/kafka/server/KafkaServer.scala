@@ -196,7 +196,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         /* start scheduler */
         kafkaScheduler.startup()
 
-        /* setup zookeeper */
+        //初始化zk客户端
         zkUtils = initZk()
 
         /* Get or create cluster_id */
@@ -229,7 +229,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkUtils)
 
-        /* start group coordinator */
+        //todo 组协调者
         groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, kafkaMetricsTime)
         groupCoordinator.startup()
 

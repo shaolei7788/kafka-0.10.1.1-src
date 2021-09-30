@@ -21,7 +21,7 @@ import kafka.utils._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
-import kafka.log.LogConfig
+import kafka.log.{Log, LogConfig}
 import kafka.server._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
@@ -429,9 +429,13 @@ class Partition(val topic: String,
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       val leaderReplicaOpt = leaderReplicaIfLocal()
       leaderReplicaOpt match {
+        //todo 只有leader副本支持追加消息操作
         case Some(leaderReplica) =>
-          val log = leaderReplica.log.get
+          //获取leader partition对应的log对象
+          val log : Log = leaderReplica.log.get
+          //默认 minInSyncReplicas = 1
           val minIsr = log.config.minInSyncReplicas
+          //isr 列表个数
           val inSyncSize = inSyncReplicas.size
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
@@ -439,11 +443,12 @@ class Partition(val topic: String,
             throw new NotEnoughReplicasException("Number of insync replicas for partition [%s,%d] is [%d], below required minimum [%d]"
               .format(topic, partitionId, inSyncSize, minIsr))
           }
-
+          //todo 往leader副本的log对象中追加消息，本质是调研log的append方法
           val info = log.append(messages, assignOffsets = true)
           // probably unblock some follower fetch requests since log end offset has been updated
           replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1
+          //todo 尝试后移leader副本的HE值
           (info, maybeIncrementLeaderHW(leaderReplica))
 
         case None =>

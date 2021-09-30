@@ -351,10 +351,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body.asInstanceOf[ProduceRequest]
     val numBytesAppended = request.header.sizeOf + produceRequest.sizeOf
 
+    //主题不存在或未授权
     val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = produceRequest.partitionRecords.asScala.partition {
       case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
     }
 
+    //authorizedRequestInfo 权限请求
     val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
       case (topicPartition, _) => authorize(request.session, Write, new Resource(auth.Topic, topicPartition.topic))
     }
@@ -429,16 +431,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
 
       // Convert ByteBuffer to ByteBufferMessageSet
-      val authorizedMessagesPerPartition = authorizedRequestInfo.map {
+      val authorizedMessagesPerPartition : mutable.Map[TopicPartition, ByteBufferMessageSet] = authorizedRequestInfo.map {
         case (topicPartition, buffer) => (topicPartition, new ByteBufferMessageSet(buffer))
       }
 
       // call the replica manager to append messages to the replicas
+      //todo 把接收到的消息追加到磁盘文件中
       replicaManager.appendMessages(
         produceRequest.timeout.toLong,
         produceRequest.acks,
         internalTopicsAllowed,
         authorizedMessagesPerPartition,
+        //回调函数
         sendResponseCallback)
 
       // if the request is put into the purgatory, it will have a held reference
