@@ -18,6 +18,8 @@ package kafka.api
 
 import java.nio._
 import java.nio.channels.GatheringByteChannel
+import kafka.common._
+import org.apache.kafka.common.network.TransportLayer
 
 /**
  * Helper functions specific to parsing or serializing requests and responses

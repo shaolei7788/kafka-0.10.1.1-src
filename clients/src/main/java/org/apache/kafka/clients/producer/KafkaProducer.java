@@ -213,7 +213,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
             this.time = new SystemTime();
-            //获取client id，如果没有就自动生成一个
+            //todo 获取client id，如果没有就自动生成一个
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0) {
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
@@ -225,8 +225,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                     .tags(metricTags);
-            List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                    MetricsReporter.class);
+            List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,MetricsReporter.class);
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
             //设置分区器,初始化流程中,默认会有一个分区器,目的是计算消息发送到服务端哪个地方
@@ -242,16 +241,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             //设置序列化器,kafka发送数据需要进行网络传输,所以需要将数据序列化为二进制
             if (keySerializer == null) {
-                this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                        Serializer.class);
+                this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
                 this.keySerializer.configure(config.originals(), true);
             } else {
                 config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
                 this.keySerializer = keySerializer;
             }
             if (valueSerializer == null) {
-                this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                        Serializer.class);
+                this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
                 this.valueSerializer.configure(config.originals(), false);
             } else {
                 config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
@@ -268,8 +265,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
 
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer, valueSerializer, interceptorList, reporters);
+
             //生产者从服务端拉取过来的kafka的元数据
             //初始化一个元数据对象
+            //retryBackoffMs 100ms
             //metadata.max.age.ms 默认5分钟
             //生产者每隔一段时间都要去更新一下集群的元数据
             //拿到元数据信息的很重要的一个目的就是计算消息将会发到哪个分区
@@ -324,15 +323,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             }
 
-            //TODO 创建了一个核心组件,也就是缓存对象
+            //TODO 创建了一个核心组件,也就是缓存对象  BATCH_SIZE_CONFIG 16384 = 16k
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
-                    this.totalMemorySize,
+                    this.totalMemorySize,//32m
                     this.compressionType,
-                    config.getLong(ProducerConfig.LINGER_MS_CONFIG),
-                    retryBackoffMs,
+                    config.getLong(ProducerConfig.LINGER_MS_CONFIG),//0
+                    retryBackoffMs,//100ms
                     metrics,
                     time);
 
+            //通过参数获取 bootstrap.servers
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
@@ -347,7 +347,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
              * (4). receive.buffer.bytes:socket接收数据的缓冲区的大小,默认值是32K
              */
             NetworkClient client = new NetworkClient(
-                    new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "producer", channelBuilder),
+                    new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                    this.metrics, time, "producer", channelBuilder),
                     this.metadata,
                     clientId,
                     config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
@@ -375,9 +376,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
              *
              * 注意，ack的默认值就是1。这个默认值其实就是吞吐量与可靠性的一个折中方案。
              * 生产上我们可以根据实际情况进行调整，比如如果你要追求高吞吐量，那么就要放弃可靠性。
-             *
              * 还需要注意一点,ack是String类型的,不是int类型,因为 ack=-1和 ack=all是一样的
-             *
              */
             //初始化一个线程
             this.sender = new Sender(client,
@@ -401,8 +400,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.ioThread.start();
 
             this.errors = this.metrics.sensor("errors");
-
-
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
             log.debug("Kafka producer started");
@@ -524,7 +521,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // first make sure the metadata for the topic is available
             // 首先确保主题的元数据可用
             /**
-             * 步骤一: 同步等待拉取元数据  maxBlockTimeMs : 最大的等待时间 60s
+             * 步骤一:
+             *      同步等待拉取元数据
+             *      maxBlockTimeMs : 最大的等待时间 60s
              */
             ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
             //clusterAndWaitTime.waitedOnMetadataMs 拉取元数据所用的时间
@@ -567,7 +566,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             //验证记录大小是否过大
             ensureValidRecordSize(serializedSize);
             /**
-             * 步骤五: 获取到了元数据,也计算出来了分区号,就可以创建一个封装分区的对象
+             * 步骤五:
+             *      获取到了元数据,也计算出来了分区号,就可以创建一个封装分区的对象
              */
             tp = new TopicPartition(record.topic(), partition);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
@@ -576,6 +576,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // producer callback将确保同时调用'callback'和interceptor callback
             /**
              *  步骤六:
+             *
              *      给每一条消息都绑定它的回调函数,因为我们使用的是异步的方式发送消息
              *      如果发送出去的消息有返回响应,就会调用回调函数
              *      此处是给消息绑定回调函数
@@ -951,10 +952,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return partition != null ?
                 partition :
                 //没有分区号的时候,使用分区器进行选择合适的分区
-                partitioner.partition(
-                        record.topic(),
-                        record.key(), serializedKey,
-                        record.value(), serializedValue, cluster);
+                partitioner.partition(record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
     }
 
     private static class ClusterAndWaitTime {

@@ -214,11 +214,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
         metadataCache = new MetadataCache(config.brokerId)
-        //todo socket server 服务端
+        //socket server 服务端
         socketServer = new SocketServer(config, metrics, kafkaMetricsTime)
         socketServer.startup()
 
-        //todo start replica manager  副本管理器
+        /* start replica manager */
         replicaManager = new ReplicaManager(config, metrics, time, kafkaMetricsTime, zkUtils, kafkaScheduler, logManager,
           isShuttingDown, quotaManagers.follower)
         replicaManager.startup()
@@ -229,7 +229,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkUtils)
 
-        /* start group coordinator */
+        //todo 创建协调者
         groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, kafkaMetricsTime)
         groupCoordinator.startup()
 
@@ -244,7 +244,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         apis = new KafkaApis(socketServer.requestChannel, replicaManager, adminManager, groupCoordinator,
           kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers, clusterId)
 
-        //todo  numIoThreads = 8
         requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
 
         Mx4jLoader.maybeLoad()

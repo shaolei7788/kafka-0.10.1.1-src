@@ -17,8 +17,19 @@
 
 package kafka.api
 
-import java.nio.ByteBuffer
+import kafka.utils.nonthreadsafe
+import kafka.api.ApiUtils._
+import kafka.common.TopicAndPartition
+import kafka.consumer.ConsumerConfig
+import kafka.network.RequestChannel
+import kafka.message.MessageSet
 import java.util.concurrent.atomic.AtomicInteger
+import java.nio.ByteBuffer
+
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+
+import scala.collection.mutable.ArrayBuffer
+import scala.util.Random
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 

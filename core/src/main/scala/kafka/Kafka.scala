@@ -56,13 +56,14 @@ object Kafka extends Logging {
     try {
       val serverProps = getPropsFromArgs(args)
       val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
+
       // attach shutdown handler to catch control-c
       Runtime.getRuntime().addShutdownHook(new Thread() {
         override def run() = {
           kafkaServerStartable.shutdown
         }
       })
-      //todo 启动
+
       kafkaServerStartable.startup
       kafkaServerStartable.awaitShutdown
     }

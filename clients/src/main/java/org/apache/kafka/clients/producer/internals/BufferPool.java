@@ -43,11 +43,9 @@ import org.apache.kafka.common.utils.Time;
  */
 public final class BufferPool {
 
-    //总内存大小 默认32m
     private final long totalMemory;
     //一个批次的大小,默认是16K
     private final int poolableSize;
-
     private final ReentrantLock lock;
     //内存池就是一个队列,队列里面放的就是一块块的内存
     //就是跟连接池是一个道理
@@ -117,7 +115,6 @@ public final class BufferPool {
             // memory on hand or if we need to block
             //内存的个数*内存的大小=free的大小
             int freeListSize = this.free.size() * this.poolableSize;
-            // availableMemory 可用内存 最开始是32m
             if (this.availableMemory + freeListSize >= size) {
                 //size是我们这次要申请的内存大小
                 //this.availableMemory + freeListSize 目前可用的总内存
@@ -129,10 +126,9 @@ public final class BufferPool {
                 lock.unlock();
                 //直接分配内存
                 return ByteBuffer.allocate(size);
-            } else {
-                //todo 还有一种情况,就是剩余的可用内存值小于我们要申请的内存大小
+            } else {//还有一种情况,就是剩余的可用内存值小于我们要申请的内存大小
                 // we are out of memory and will have to block
-                // 统计已分配的内存
+                //统计分配的内存
                 int accumulated = 0;
                 ByteBuffer buffer = null;
                 Condition moreMemory = this.lock.newCondition();
@@ -152,8 +148,8 @@ public final class BufferPool {
                     long timeNs;
                     boolean waitingTimeElapsed;
                     try {
-                        //todo 在等待别人释放内存
-                        // 两种情况下会继续执行: 1.时间到了 2.被人唤醒
+                        //在等待别人释放内存
+                        //两种情况下会继续执行: 1.时间到了 2.被人唤醒
                         waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
                     } catch (InterruptedException e) {
                         this.waiters.remove(moreMemory);
@@ -238,7 +234,7 @@ public final class BufferPool {
         try {
             //如果内存块的大小等于一个批次的大小
             if (size == this.poolableSize && size == buffer.capacity()) {
-                //清除内存块里的数据
+                //清楚内存块里的数据
                 buffer.clear();
                 //把内存块放入内存池
                 this.free.add(buffer);
@@ -249,10 +245,10 @@ public final class BufferPool {
                 this.availableMemory += size;
             }
             Condition moreMem = this.waiters.peekFirst();
-            if (moreMem != null){
-                //todo 释放了内存(或者是归还了内存之后) 都会唤醒等待内存的线程
+            if (moreMem != null)
+                //释放了内存(或者是归还了内存之后)
+                //都会唤醒等待内存的线程
                 moreMem.signal();
-            }
         } finally {
             lock.unlock();
         }

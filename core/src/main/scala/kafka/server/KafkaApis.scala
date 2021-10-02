@@ -75,8 +75,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
         format(request.requestDesc(true), request.connectionId, request.securityProtocol, request.session.principal))
       ApiKeys.forId(request.requestId) match {
-        //todo 处理生产者请求
         case ApiKeys.PRODUCE => handleProducerRequest(request)
+        //todo 消费者拉取数据 FETCH
         case ApiKeys.FETCH => handleFetchRequest(request)
         case ApiKeys.LIST_OFFSETS => handleOffsetRequest(request)
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
@@ -86,7 +86,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CONTROLLED_SHUTDOWN_KEY => handleControlledShutdownRequest(request)
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
+        //todo 消费者 查找 group_coordinator
         case ApiKeys.GROUP_COORDINATOR => handleGroupCoordinatorRequest(request)
+        //todo 消费者加入group
         case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
@@ -959,19 +961,25 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responseBody = new GroupCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED.code, Node.noNode)
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
-      val partition = coordinator.partitionFor(groupCoordinatorRequest.groupId)
+      // 通过对 partition = hash(groupId) % 50  找到对应分区对应 __consumer_offsets-partition 的leader,返回该node
 
-      // get metadata (and create the topic if necessary)
-      val offsetsTopicMetadata = getOrCreateGroupMetadataTopic(request.securityProtocol)
+
+      //todo 通过groupid 获取 partition = hash(groupId) % 50
+      val partition: Int = coordinator.partitionFor(groupCoordinatorRequest.groupId)
+
+      // 主题元数据
+      val offsetsTopicMetadata : MetadataResponse.TopicMetadata = getOrCreateGroupMetadataTopic(request.securityProtocol)
 
       val responseBody = if (offsetsTopicMetadata.error != Errors.NONE) {
         new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code, Node.noNode)
       } else {
-        val coordinatorEndpoint = offsetsTopicMetadata.partitionMetadata().asScala
+        // PartitionMetadata
+        val coordinatorEndpoint : Option[Node] = offsetsTopicMetadata.partitionMetadata().asScala
           .find(_.partition == partition)
           .map(_.leader())
 
         coordinatorEndpoint match {
+          //todo coordinatorEndpoint不为空
           case Some(endpoint) if !endpoint.isEmpty =>
             new GroupCoordinatorResponse(Errors.NONE.code, endpoint)
           case _ =>
@@ -979,8 +987,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      trace("Sending consumer metadata %s for correlation id %d to client %s."
-        .format(responseBody, request.header.correlationId, request.header.clientId))
+      trace("Sending consumer metadata %s for correlation id %d to client %s.".format(responseBody, request.header.correlationId, request.header.clientId))
+      //发送响应信息
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
   }
@@ -1028,6 +1036,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val responseHeader = new ResponseHeader(request.header.correlationId)
 
     // the callback for sending a join-group response
+    //todo 加入group的回调函数
     def sendResponseCallback(joinResult: JoinGroupResult) {
       val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
       val responseBody = new JoinGroupResponse(request.header.apiVersion, joinResult.errorCode, joinResult.generationId,
@@ -1038,7 +1047,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     }
 
+    //todo 权限校验
     if (!authorize(request.session, Read, new Resource(Group, joinGroupRequest.groupId()))) {
+      //无权限
       val responseBody = new JoinGroupResponse(
         request.header.apiVersion,
         Errors.GROUP_AUTHORIZATION_FAILED.code,
@@ -1049,9 +1060,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         Map.empty[String, ByteBuffer])
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
+      //todo 有权限
       // let the coordinator to handle join-group
       val protocols = joinGroupRequest.groupProtocols().map(protocol =>
         (protocol.name, Utils.toArray(protocol.metadata))).toList
+      //todo
       coordinator.handleJoinGroup(
         joinGroupRequest.groupId,
         joinGroupRequest.memberId,

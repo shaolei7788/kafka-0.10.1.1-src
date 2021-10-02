@@ -20,6 +20,11 @@ package kafka.api
 
 import java.nio._
 
+import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.utils._
+
+import scala.collection.Set
+
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0

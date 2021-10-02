@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Utils;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The default partitioning strategy:
@@ -64,10 +64,10 @@ public class DefaultPartitioner implements Partitioner {
             //获取主题中可用的分区
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             if (availablePartitions.size() > 0) {
-                //todo 计算消息发送到哪个分区  toPositive 变成正数
-                // 实现一个轮询的效果,达到消息的负载均衡
+                //计算消息发送到哪个分区
+                //实现一个轮询的效果,达到消息的负载均衡
                 int part = Utils.toPositive(nextValue) % availablePartitions.size();
-                // 根据取模的值分配分区
+                //根据取模的值分配分区
                 return availablePartitions.get(part).partition();
             } else {
                 // no partitions are available, give a non-available partition

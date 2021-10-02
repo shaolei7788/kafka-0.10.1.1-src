@@ -46,7 +46,7 @@ public class NetworkClient implements KafkaClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);
 
-    //java nio Selector  实现类 Selector
+    /* the selector used to perform network i/o */
     private final Selectable selector;
 
     private final MetadataUpdater metadataUpdater;
@@ -127,7 +127,6 @@ public class NetworkClient implements KafkaClient {
         }
         this.selector = selector;
         this.clientId = clientId;
-        //maxInFlightRequestsPerConnection = 5
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs);
         this.socketSendBuffer = socketSendBuffer;
@@ -150,14 +149,16 @@ public class NetworkClient implements KafkaClient {
         //如果当前的节点为null,就报异常
         if (node.isEmpty())
             throw new IllegalArgumentException("Cannot connect to empty node " + node);
-        //todo 检查具有给定id的节点是否准备好发送请求。
+        //检查具有给定id的节点是否准备好发送请求。
         if (isReady(node, now))
             return true;
-        //todo 判断是否可以尝试去建立连接
+        //判断是否可以尝试去建立连接
         if (connectionStates.canConnect(node.idString(), now))
             // if we are interested in sending to a node and we don't have a connection to it, initiate one
-            //todo 初始化连接 绑定连接事件
+            //初始化连接
+            //绑定连接事件
             initiateConnect(node, now);
+
         return false;
     }
 
@@ -210,8 +211,9 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public boolean isReady(Node node, long now) {
-        // if we need to update our metadata now declare all requests unready to make metadata requests first priority
-        //todo !metadataUpdater.isUpdateDue(now) 我们要发送写数据请求的时候,不能是正在更新元数据的时候
+        // if we need to update our metadata now declare all requests unready to make metadata requests first
+        // priority
+        //!metadataUpdater.isUpdateDue(now) 我们要发送写数据请求的时候,不能是正在更新元数据的时候
         return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString());
     }
 
@@ -279,19 +281,20 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
-        //步骤一: 封装一个要拉取元数据的请求  内部类 DefaultMetadataUpdater#maybeUpdate
+        //步骤一: 封装一个要拉取元数据的请求  DefaultMetadataUpdater#maybeUpdate
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
             //步骤二: 发送请求,进行复杂的网络操作
-            //
             //TODO 执行网络IO的操作
             this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }
+
         // process completed actions
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
+        //处理完成发送的请求
         handleCompletedSends(responses, updatedNow);
         //在上一步this.selector.poll 已经发送出去了请求,那么在这里就来处理响应
         //步骤三: 处理响应,响应里面就会有我们需要的元数据
@@ -299,7 +302,7 @@ public class NetworkClient implements KafkaClient {
          * kafka获取元数据的流程跟发送消息的流程是一模一样的
          * 获取元数据--> 判断网络连接是否建立好--> 建立网络连接--> 发送请求(获取元数据的请求)--> 服务端发送回来响应
          */
-        //todo 将completedReceives 封装成 ClientResponse 添加到responses里
+        //完成接收的处理器
         handleCompletedReceives(responses, updatedNow);
         //处理断开的连接
         handleDisconnections(responses, updatedNow);
@@ -311,16 +314,24 @@ public class NetworkClient implements KafkaClient {
         for (ClientResponse response : responses) {
             if (response.request().hasCallback()) {
                 try {
+                    //todo 获取响应对应的客户端请求
+                    ClientRequest clientRequest = response.request();
                     //响应对象中封装有最初的请求对象,
                     //可以直接调用请求对象中的回调函数
-                    //此处调用的是网络请求的回调函数,不是业务代码里面我们自己的回调函数
-                    //对应Sender#produceRequest onComplete 方法
-                    response.request().callback().onComplete(response);
+                    //生产者回调对象是RequestCompletionHandler
+                    //消费者回调对象是RequestFutureCompletionHandler
+                    //RequestFutureCompletionHandler implements RequestCompletionHandler
+                    RequestCompletionHandler callback = clientRequest.callback();
+                    //todo 这个callback 即可能是生产者也可可能是消费者的回调对象
+                    // 此处调用的是网络请求的回调函数,不是业务代码里面我们自己的回调函数
+                    // 将response响应放入pendingCompletion
+                    callback.onComplete(response);
                 } catch (Exception e) {
                     log.error("Uncaught error in request completion:", e);
                 }
             }
         }
+
         return responses;
     }
 
@@ -501,8 +512,7 @@ public class NetworkClient implements KafkaClient {
             //解析服务端发送回来的请求(里面有响应的结果数据)
             Struct body = parseResponse(receive.payload(), req.request().header());
             //TODO 判断是否是关于元数据信息响应
-            boolean metadataUpdaterFlag = metadataUpdater.maybeHandleCompletedReceive(req, now, body);
-            if (!metadataUpdaterFlag)
+            if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
                 //将解析的结果封装到ClientResponse对象中
                 //ClientResponse对象中的四个参数依次是
                 // 1.发出去的请求
@@ -589,6 +599,7 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public List<Node> fetchNodes() {
+            //todo metadata.fetch() = Cluster
             return metadata.fetch().nodes();
         }
 
@@ -678,7 +689,6 @@ public class NetworkClient implements KafkaClient {
                 //更新元数据信息
                 this.metadata.update(cluster, now);
             } else {
-                //更新失败
                 log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
                 this.metadata.failedUpdate(now);
             }
@@ -708,15 +718,14 @@ public class NetworkClient implements KafkaClient {
             if (canSendRequest(nodeConnectionId)) {
                 this.metadataFetchInProgress = true;
                 MetadataRequest metadataRequest;
-                //todo 判断是否需要获取所有主题的元数据
+                //判断是否需要获取所有主题的元数据
                 if (metadata.needMetadataForAllTopics())
                     //封装请求,获取所有topics
                     //但是我们获取元数据的时候,只获取自己要发送消息的对应的topic的元数据的信息
                     metadataRequest = MetadataRequest.allTopics();
-                else{
+                else
                     //只拉取接收我们发送的消息的topics
                     metadataRequest = new MetadataRequest(new ArrayList<>(metadata.topics()));
-                }
                 //为给定的主题创建元数据请求
                 ClientRequest clientRequest = request(now, nodeConnectionId, metadataRequest);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());

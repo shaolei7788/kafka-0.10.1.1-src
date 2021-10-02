@@ -166,6 +166,7 @@ public final class Metadata {
      * 参数二: maxWaitMs: 最长可以等待的时间
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
+        //maxWaitMs 60000
         if (maxWaitMs < 0) {
             throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milli seconds");
         }
@@ -236,7 +237,7 @@ public final class Metadata {
         if (topicExpiryEnabled) {
             // Handle expiry of topics from the metadata refresh set.
             // 处理元数据刷新之后过期的主题
-            // 当第一次进来的时候,topics是空的,所以下面的代码是不会执行的
+            //当第一次进来的时候,topics是空的,所以下面的代码是不会执行的
             for (Iterator<Map.Entry<String, Long>> it = topics.entrySet().iterator(); it.hasNext(); ) {
                 Map.Entry<String, Long> entry = it.next();
                 long expireMs = entry.getValue();

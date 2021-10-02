@@ -18,21 +18,18 @@
 package org.apache.kafka.common.network;
 
 
-import java.io.IOException;
+import org.apache.kafka.common.utils.Utils;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
-
 import java.security.Principal;
-
-import org.apache.kafka.common.utils.Utils;
 //TODO 我们认为KafkaChannel就是对javaNIO中的socketChannel进行了封装
 public class KafkaChannel {
     //broker的id
     //一个brokerId对应一个kafkaChannel
     private final String id;
-    //里面有SocketChannel
     private final TransportLayer transportLayer;
     private final Authenticator authenticator;
     private final int maxReceiveSize;
@@ -143,7 +140,6 @@ public class KafkaChannel {
         receive(receive);
         //是否读完一个完整的响应消息
         if (receive.complete()) {
-            //payload = buffer
             receive.payload().rewind();
             result = receive;
             receive = null;

@@ -25,19 +25,16 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 public class Producer {
-    private final KafkaProducer<Integer, String> producer;
+    private final KafkaProducer<String, String> producer;
     private final String topic;
     private final Boolean isAsync;
 
 
-    public static void main(String[] args) {
-        Producer producerThread = new Producer(KafkaProperties.TOPIC, true);
-        try {
-            Thread.sleep(100000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        //producerThread.produce();
+    public static void main(String[] args) throws InterruptedException {
+        Producer producer = new Producer(KafkaProperties.TOPIC, false);
+        producer.produce();
+
+       // Thread.sleep(Integer.MAX_VALUE);
     }
 
     /**
@@ -51,12 +48,12 @@ public class Producer {
         Properties props = new Properties();
         //指定生产者客户端连接kafka集群的broker地址清单,可以设置一个或多个(集群会同步消息)
         //建议至少设置2个地址,当其中任意一个宕机的时候,生产者仍然可以连接到kafka的集群
-        props.put("bootstrap.servers", "hadoop1:9092");
+        props.put("bootstrap.servers", "hadoop5:9092");
         //设定kafkaProducer对应的客户端id,默认值是空,如果客户端不设置,那么kafkaProducer会自动生成一个非空字符串,内容形式是 "process-1"
         props.put("client.id", "DemoProducer");
         //设置序列化的类,broker端接收的消息必须以字节数组的(byte[])的形式存在
         //指定的序列化器必须是全限定名
-        props.put("key.serializer", "org.apache.kafka.common.serialization.IntegerSerializer");
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         //消费者 ,消费数据的时候,就要进行反序列化
         //TODO 初始化KafkaProducer过程中都干了些什么: 初始化了一堆参数;初始化了几个核心的对象
@@ -68,6 +65,7 @@ public class Producer {
     //发送消息的三种方式 : 发后即忘,同步,异步
     //send()方法有两种重载方式,其本身就是异步的,如果想要实现同步,可以利用send()方法返回的Future对象实现
     public void produce() {
+
         //定义一个变量
         int messageNo = 1;
         // 一直往kafka发送数据
@@ -81,11 +79,11 @@ public class Producer {
             // 2. 同步发送
             // isAsync true的时候是异步发送 false的时候是同步发送
             if (isAsync) { // Send asynchronously
-                //todo 异步发送 , 一直发送,消息响应结果交给回调函数处理
+                //异步发送 , 一直发送,消息响应结果交给回调函数处理
                 //这样做的好处,性能比较好,我们的生产环境就用这种方式
                 //在send()方法里构建消息对象ProducerRecord,topic和value是必填项
                 //回调函数的作用,判断有没有异常,如果有异常,分为2种情况: 1.不可重试异常,直接返回异常到客户端,再进行处理;2.可以重试异常,重新加入缓存里面,再发送出去
-                producer.send(new ProducerRecord<>(topic, messageNo, messageStr), new DemoCallBack(startTime, messageNo, messageStr));
+                producer.send(new ProducerRecord<>(topic, messageStr, messageStr), new DemoCallBack(startTime, messageNo, messageStr));
 
                 //producer.send(record1,callback1);
                 //producer.send(record2,callback2);
@@ -99,7 +97,8 @@ public class Producer {
                     //发送一条消息,等待这条消息的所有后续工作完成之后,再继续发送下一条消息
                     //Future对象对象可以使调用方稍后获得发送的结果
                     //send(xxx).get(),直链式的方式可以阻塞等待kafka的响应,直到消息发送成功或被捕获异常
-                    producer.send(new ProducerRecord<>(topic, messageNo, messageStr)).get();
+                    System.out.println("send message begin");
+                    producer.send(new ProducerRecord<>(topic, messageStr, messageStr)).get();
                     System.out.println("Sent message: (" + messageNo + ", " + messageStr + ")");
                 } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
@@ -137,7 +136,6 @@ class DemoCallBack implements Callback {
         //没有异常
         if (metadata != null) {
             System.out.println(
-                    //一般我们的生产里面,还会有其他的备用的链路
                 "message(" + key + ", " + message + ") sent to partition(" + metadata.partition() +
                     "), " +
                     "offset(" + metadata.offset() + ") in " + elapsedTime + " ms");

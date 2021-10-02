@@ -125,7 +125,6 @@ public class Sender implements Runnable {
         //所以我们要知道sender线程启动之后会一直运行
         while (running) {
             try {
-                System.out.println("run================");
                 //TODO 核心代码
                 run(time.milliseconds());
             } catch (Exception e) {
@@ -167,16 +166,14 @@ public class Sender implements Runnable {
      */
     void run(long now) {
         /**
+         *
          * (1).代码第一次运行到这里
          *      第一次进来的时候cluster里面是没有元数据的
          *      接下来的代码都会依赖元数据,所以后面的代码都不会执行
          *      指导最后一行代码this.client.poll(pollTimeout, now);才会执行
-         *
          * (2).代码第二次运行到这里
          *      第二次进来的时候,已经有元数据了
-         *
          *  步骤一: 获取元数据
-         *
          */
         //获取元数据
         //当代码第一次运行到这里的时候,其实是没有元数据的,只是返回了cluster对象
@@ -186,7 +183,9 @@ public class Sender implements Runnable {
          * 步骤二: 首先判断哪些batches<TopicPartion,Dqueue<RecordBatch>>可以发送,
          *          (换句话说,我们需要知道一个批次可以发送出去的条件)
          *      获取到这个partition的leader partition对应的broker主机(根据元数据来就行了)
+         *
          *      kafka发送消息的时候,会把消息发送到leader partition上面
+         *
          *      哪些broker上面需要我们去发送消息
          */
         // get the list of partitions with data ready to send
@@ -218,7 +217,7 @@ public class Sender implements Runnable {
              * 步骤四: 检查与要发送数据的主机的网络是否已经建立好
              */
             if (!this.client.ready(node, now)) {
-                //如果返回的是false,说明网络连接没有建立好,那么!false就进来了,
+                //如果返回的是false,那么!false就进来了,说明网络连接没有建立好
                 //移除result里面要接收消息的节点
                 //所以我们会看到这里所有的主机都会被移除
                 iter.remove();
@@ -277,9 +276,11 @@ public class Sender implements Runnable {
         sensors.updateProduceRequestMetrics(batches);
         /**
          * 步骤七: 创建生产者请求连接,将消息批次存储到请求列表中
+         *
          * 创建请求
          * 发送消息的时候,有一些分区里的消息会发送到同一台服务器上面,如果是以分区为单位依次发送,那么网络请求会有些频繁
          * 集群中的网络资源是十分珍贵的,所以发往同一个服务器的分区数据,会共用同一个请求,这样就减少了网络请求
+         *
          */
         List<ClientRequest> requests = createProduceRequests(batches, now);
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
@@ -294,10 +295,11 @@ public class Sender implements Runnable {
         }
         //TODO 发送请求的操作
         for (ClientRequest request : requests)
-            /**
-             * 接下来要发送请求了,要把数据发送到服务端
-             * 那么要做的事情,就是在Selector上面绑定一个写数据的事件 绑定了OP_WRITE事件
-             */
+        /**
+         * 接下来要发送请求了,要把数据发送到服务端
+         * 那么要做的事情,就是在Selector上面绑定一个写数据的事件
+         */
+            //绑定了OP_WRITE事件
             client.send(request, now);
 
         // if some partitions are already ready to be sent, the select time would be 0;
@@ -308,14 +310,15 @@ public class Sender implements Runnable {
         //就是用的这个方法拉取的元数据
         /**
          * 步骤八: 真正执行网络操作的就是这个NetWordClient组件
-         *        包括: 发送请求,接收响应(处理响应)
-         *        拉取元数据信息,靠的就是这段代码
+         *          包括: 发送请求,接收响应(处理响应)
+         *
+         *       拉取元数据信息,靠的就是这段代码
          */
         //client对象是KafkaClient类型,它是一个接口对象,它的实现类就是NetworkClient
         //NetworkClient实现类中的poll方法:对socket执行实际的读写操作。
         //当代码第一次进来的时候没有元数据,就是这段代码来获取元数据的
         //当没有建立连接的时候,就在这里进行网络连接
-        // NetworkClient#poll()
+        //NetworkClient#poll
         this.client.poll(pollTimeout, now);
     }
 
@@ -345,8 +348,9 @@ public class Sender implements Runnable {
         int correlationId = response.request().request().header().correlationId();
         //broker失去连接,这是小概率时间,一般不会走这里
         if (response.wasDisconnected()) {
-            log.trace("Cancelled request {} due to node {} being disconnected", response,
-                    response.request().request().destination());
+            log.trace("Cancelled request {} due to node {} being disconnected", response, response.request()
+                                                                                                  .request()
+                                                                                                  .destination());
             for (RecordBatch batch : batches.values())
                 completeBatch(batch, Errors.NETWORK_EXCEPTION, -1L, Record.NO_TIMESTAMP, correlationId, now);
         } else {
@@ -363,11 +367,12 @@ public class Sender implements Runnable {
                 for (Map.Entry<TopicPartition, ProduceResponse.PartitionResponse> entry : produceResponse.responses().entrySet()) {
                     TopicPartition tp = entry.getKey();
                     ProduceResponse.PartitionResponse partResp = entry.getValue();
+                    //如果处理成功就是成功了,如果服务端处理失败了,会给我吗返回失败的信息
                     //error中存储的就是服务端发过来的异常码
                     Errors error = Errors.forCode(partResp.errorCode);
                     //获取当前分区的响应
                     RecordBatch batch = batches.get(tp);
-                    //todo 对响应进行处理
+                    //对响应进行处理
                     completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
                 }
                 this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
@@ -394,7 +399,7 @@ public class Sender implements Runnable {
      *
      */
     private void completeBatch(RecordBatch batch, Errors error, long baseOffset, long timestamp, long correlationId, long now) {
-        //todo 如果响应带有异常码,并且这个请求是可以重试的
+        //如果响应带有异常码,并且这个请求是可以重试的
         if (error != Errors.NONE && canRetry(batch, error)) {
             // retry
             log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
@@ -406,9 +411,7 @@ public class Sender implements Runnable {
             this.accumulator.reenqueue(batch, now);
             this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
         } else {
-            //TODO 来到这里的数据,
-            // (1) 带有异常,但是不能重试(要么是压根不让重试,要么就是重试次数超了);
-            // (2) 没有异常
+            //TODO 来到这里的数据,(1) 带有异常,但是不能重试(要么是压根不让重试,要么就是重试次数超了); (2) 没有异常
             RuntimeException exception;
             //如果响应里面带有没有权限的异常,
             if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
@@ -422,7 +425,7 @@ public class Sender implements Runnable {
             //回调函数调用完了之后,说明一个完整的消息发送流程就结束了
             //生产者处理响应
             batch.done(baseOffset, timestamp, exception);
-            //todo 回收资源
+            //回收资源
             this.accumulator.deallocate(batch);
             if (error != Errors.NONE)
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
