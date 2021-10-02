@@ -721,7 +721,6 @@ public abstract class AbstractCoordinator implements Closeable {
         RequestFuture<ClientResponse> future = client.send(coordinator, ApiKeys.HEARTBEAT, req);
         RequestFuture<Void> compose = future.compose(new HeartbeatResponseHandler());
         return compose;
-
     }
 
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
