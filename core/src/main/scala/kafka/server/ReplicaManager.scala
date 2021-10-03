@@ -356,7 +356,6 @@ class ReplicaManager(val config: KafkaConfig,
         // requests may arrive and hence make this operation completable.
         //尝试执行delayedProduce 的 tryComplete,执行成则返回，失败则加入到哈希定时器
         delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-
       } else {
         // we can respond immediately
         val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
