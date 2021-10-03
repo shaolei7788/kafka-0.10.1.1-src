@@ -221,6 +221,7 @@ public class Selector implements Selectable {
     public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
+        //绑定channel
         key.attach(channel);
         this.channels.put(id, channel);
     }

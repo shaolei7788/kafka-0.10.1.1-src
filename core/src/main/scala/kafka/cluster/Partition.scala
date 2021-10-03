@@ -21,7 +21,7 @@ import kafka.utils._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
-import kafka.log.LogConfig
+import kafka.log.{Log, LogConfig}
 import kafka.server._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
@@ -429,9 +429,12 @@ class Partition(val topic: String,
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       val leaderReplicaOpt = leaderReplicaIfLocal()
       leaderReplicaOpt match {
+        //如果是主副本
         case Some(leaderReplica) =>
-          val log = leaderReplica.log.get
+          val log: Log = leaderReplica.log.get
+          //最小ISR
           val minIsr = log.config.minInSyncReplicas
+          //正在同步的isr大小
           val inSyncSize = inSyncReplicas.size
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe

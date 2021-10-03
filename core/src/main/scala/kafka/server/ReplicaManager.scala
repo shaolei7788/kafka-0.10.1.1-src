@@ -324,15 +324,18 @@ class ReplicaManager(val config: KafkaConfig,
                      internalTopicsAllowed: Boolean,
                      messagesPerPartition: Map[TopicPartition, MessageSet],
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
-
     if (isValidRequiredAcks(requiredAcks)) {
+      //校验通过
       val sTime = SystemTime.milliseconds
-      val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
+      //todo 添加到本地log
+      val localProduceResults : Map[TopicPartition, LogAppendResult] = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
+      //todo 根据写日志返回的结果，封装返回给客户端的响应
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
         topicPartition ->
                 ProducePartitionStatus(
+                  //设置下一条待写入消息的偏移量
                   result.info.lastOffset + 1, // required offset
                   new PartitionResponse(result.errorCode, result.info.firstOffset, result.info.logAppendTime)) // response status
       }
@@ -340,14 +343,18 @@ class ReplicaManager(val config: KafkaConfig,
       if (delayedRequestRequired(requiredAcks, messagesPerPartition, localProduceResults)) {
         // create delayed produce operation
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
+        //todo kafka服务端在处理客户端的一些请求时，如果不能及时返回相应给客户端
+        //todo 会在服务端创建一个延迟操作对象delayedOperation,并放在延迟缓存中 delayedOperationPurgatory
+        //todo 延迟操作有很多种，延迟的生产，延迟的相应，延迟的加入，延迟的心跳
+        //todo 创建delayedProduce对象，超过timeout时间后这个操作会被认定为超时，并立即返回，发送响应给客户端
         val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
-
-        // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
+        // todo 遍历有哪些topic需要检测延迟操作是否完成
         val producerRequestKeys = messagesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
 
         // try to complete the request immediately, otherwise put it into the purgatory
         // this is because while the delayed produce operation is being created, new
         // requests may arrive and hence make this operation completable.
+        //尝试执行delayedProduce 的 tryComplete,执行成则返回，失败则加入到哈希定时器
         delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
 
       } else {
@@ -390,6 +397,7 @@ class ReplicaManager(val config: KafkaConfig,
                                messagesPerPartition: Map[TopicPartition, MessageSet],
                                requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
     trace("Append [%s] to local log ".format(messagesPerPartition))
+    //每个分区的消息
     messagesPerPartition.map { case (topicPartition, messages) =>
       BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).totalProduceRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalProduceRequestRate.mark()
@@ -401,9 +409,10 @@ class ReplicaManager(val config: KafkaConfig,
           Some(new InvalidTopicException("Cannot append to internal topic %s".format(topicPartition.topic)))))
       } else {
         try {
-          val partitionOpt = getPartition(topicPartition.topic, topicPartition.partition)
+          val partitionOpt: Option[Partition] = getPartition(topicPartition.topic, topicPartition.partition)
           val info = partitionOpt match {
             case Some(partition) =>
+              //todo
               partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet], requiredAcks)
             case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
               .format(topicPartition, localBrokerId))

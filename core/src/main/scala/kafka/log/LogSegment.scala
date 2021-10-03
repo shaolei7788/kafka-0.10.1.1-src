@@ -90,10 +90,12 @@ class LogSegment(val log: FileMessageSet,
     if (messages.sizeInBytes > 0) {
       trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at offset %d"
           .format(messages.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, offsetOfLargestTimestamp))
+      //物理地址
       val physicalPosition = log.sizeInBytes()
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
       // append the messages
+      //todo  log = FileMessageSet 添加消息
       log.append(messages)
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
@@ -101,11 +103,13 @@ class LogSegment(val log: FileMessageSet,
         offsetOfMaxTimestamp = offsetOfLargestTimestamp
       }
       // append an entry to the index (if needed)
+      // indexIntervalBytes = 4096 每次写了4096个字节的消息就更新一次索引
       if(bytesSinceLastIndexEntry > indexIntervalBytes) {
         index.append(firstOffset, physicalPosition)
         timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
         bytesSinceLastIndexEntry = 0
       }
+      //消息的大小添加到bytesSinceLastIndexEntry
       bytesSinceLastIndexEntry += messages.sizeInBytes
     }
   }

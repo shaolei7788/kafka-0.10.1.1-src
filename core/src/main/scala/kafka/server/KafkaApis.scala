@@ -75,29 +75,37 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
         format(request.requestDesc(true), request.connectionId, request.securityProtocol, request.session.principal))
       ApiKeys.forId(request.requestId) match {
+        //todo 生产者生产消息
         case ApiKeys.PRODUCE => handleProducerRequest(request)
         //todo 消费者拉取数据 FETCH
         case ApiKeys.FETCH => handleFetchRequest(request)
+        //todo 消费者列举偏移量 从分区主副本拉取
         case ApiKeys.LIST_OFFSETS => handleOffsetRequest(request)
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
         case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
         case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
         case ApiKeys.UPDATE_METADATA_KEY => handleUpdateMetadataRequest(request)
         case ApiKeys.CONTROLLED_SHUTDOWN_KEY => handleControlledShutdownRequest(request)
+        //todo 消费者提交偏移量  从Coodinator拉取
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
+        //todo 消费者拉取偏移量 从Coodinator拉取
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
         //todo 消费者 查找 group_coordinator
         case ApiKeys.GROUP_COORDINATOR => handleGroupCoordinatorRequest(request)
         //todo 消费者加入group
         case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
+        //todo 消费者发送心跳
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
+        //todo 消费者离开group
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
         case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
         case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
+        //todo 创建topic
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
+        //todo 删除topic
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
@@ -352,7 +360,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleProducerRequest(request: RequestChannel.Request) {
     val produceRequest = request.body.asInstanceOf[ProduceRequest]
     val numBytesAppended = request.header.sizeOf + produceRequest.sizeOf
-
     val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = produceRequest.partitionRecords.asScala.partition {
       case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
     }
@@ -410,7 +417,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // updating this part of the code to handle it properly.
             case version => throw new IllegalArgumentException(s"Version `$version` of ProduceRequest is not handled. Code must be updated.")
           }
-
+          //数据处理完之后需要给客户端返回相应
           requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, respBody)))
         }
       }

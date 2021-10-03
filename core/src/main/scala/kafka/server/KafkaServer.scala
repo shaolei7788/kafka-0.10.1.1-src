@@ -196,7 +196,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         /* start scheduler */
         kafkaScheduler.startup()
 
-        /* setup zookeeper */
+        //初始化zk
         zkUtils = initZk()
 
         /* Get or create cluster_id */
@@ -205,7 +205,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala)
 
-        /* start log manager */
+        //todo 创建日志管理器
         logManager = createLogManager(zkUtils.zkClient, brokerState)
         logManager.startup()
 
@@ -214,7 +214,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
         metadataCache = new MetadataCache(config.brokerId)
-        //socket server 服务端
+
+        //todo socket server 服务端
         socketServer = new SocketServer(config, metrics, kafkaMetricsTime)
         socketServer.startup()
 
@@ -223,7 +224,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           isShuttingDown, quotaManagers.follower)
         replicaManager.startup()
 
-        /* start kafka controller */
+        //创建kafka控制器
         kafkaController = new KafkaController(config, zkUtils, brokerState, kafkaMetricsTime, metrics, threadNamePrefix)
         kafkaController.startup()
 
@@ -244,6 +245,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         apis = new KafkaApis(socketServer.requestChannel, replicaManager, adminManager, groupCoordinator,
           kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers, clusterId)
 
+        //todo
         requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
 
         Mx4jLoader.maybeLoad()
@@ -648,7 +650,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
                    topicConfigs = configs,
                    defaultConfig = defaultLogConfig,
                    cleanerConfig = cleanerConfig,
-                   ioThreads = config.numRecoveryThreadsPerDataDir,
+                   ioThreads = config.numRecoveryThreadsPerDataDir,//1
                    flushCheckMs = config.logFlushSchedulerIntervalMs,
                    flushCheckpointMs = config.logFlushOffsetCheckpointIntervalMs,
                    retentionCheckMs = config.logCleanupIntervalMs,

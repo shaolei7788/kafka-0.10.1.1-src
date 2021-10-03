@@ -723,6 +723,7 @@ public abstract class AbstractCoordinator implements Closeable {
         return compose;
     }
 
+    //心跳响应
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
 
         @Override
