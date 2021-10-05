@@ -82,6 +82,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         //todo 消费者列举偏移量 从分区主副本拉取
         case ApiKeys.LIST_OFFSETS => handleOffsetRequest(request)
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
+        //todo 请求控制副本的leader follower 切换
         case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
         case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
         case ApiKeys.UPDATE_METADATA_KEY => handleUpdateMetadataRequest(request)
@@ -156,6 +157,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responseHeader = new ResponseHeader(correlationId)
       val leaderAndIsrResponse =
         if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+          //todo
           val result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, metadataCache, onLeadershipChange)
           new LeaderAndIsrResponse(result.errorCode, result.responseMap.mapValues(new JShort(_)).asJava)
         } else {
@@ -358,8 +360,11 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a produce request
    */
   def handleProducerRequest(request: RequestChannel.Request) {
-    val produceRequest = request.body.asInstanceOf[ProduceRequest]
-    val numBytesAppended = request.header.sizeOf + produceRequest.sizeOf
+    val produceRequest: ProduceRequest = request.body.asInstanceOf[ProduceRequest]
+    //要添加的字节数大小 = header + body
+    val numBytesAppended: Int = request.header.sizeOf + produceRequest.sizeOf
+    // existingAndAuthorizedForDescribeTopics 存在并且授权的topic
+    // nonExistingOrUnauthorizedForDescribeTopics 不存在并且没有授权的topic
     val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = produceRequest.partitionRecords.asScala.partition {
       case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
     }
@@ -432,17 +437,22 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceResponseCallback)
     }
 
-    if (authorizedRequestInfo.isEmpty)
+    if (authorizedRequestInfo.isEmpty) {
+      //授权信息为空 直接发送响应回调
       sendResponseCallback(Map.empty)
-    else {
+    } else {
+      //todo 正常走这里  internalTopicsAllowed 判断是否是内部topic  内部topic 就是__consumer_offset
+      // 我们自己创建的topic 为false
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
 
       // Convert ByteBuffer to ByteBufferMessageSet
-      val authorizedMessagesPerPartition = authorizedRequestInfo.map {
+      //todo 每个分区的消息  key = TopicPartition value = ByteBufferMessageSet
+      val authorizedMessagesPerPartition : mutable.Map[TopicPartition, ByteBufferMessageSet] = authorizedRequestInfo.map {
+        //todo 将消息buffer转化为ByteBufferMessageSet
         case (topicPartition, buffer) => (topicPartition, new ByteBufferMessageSet(buffer))
       }
 
-      // call the replica manager to append messages to the replicas
+      // ReplicaManager 主要是管理一个broker范围内的Partition
       replicaManager.appendMessages(
         produceRequest.timeout.toLong,
         produceRequest.acks,

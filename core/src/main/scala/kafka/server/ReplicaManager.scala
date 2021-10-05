@@ -103,30 +103,41 @@ class ReplicaManager(val config: KafkaConfig,
                      time: Time,
                      jTime: JTime,
                      val zkUtils: ZkUtils,
+                     //KafkaScheduler 执行ReplicaManager的周期性任务 1 highwatermark-checkpoint isr-expiration isr-change-propagation
                      scheduler: Scheduler,
-                     val logManager: LogManager,
+                     val logManager: LogManager,//对分区的读写操作都是委托给底层的日志存储子系统
                      val isShuttingDown: AtomicBoolean,
                      quotaManager: ReplicationQuotaManager,
                      threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
   /* epoch of the controller that last changed the leader */
+  //记录KafkaController的年代信息，重新选举会递增
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
+  //当前brokerd id，主要用于查找local replica
   private val localBrokerId = config.brokerId
-  private val allPartitions = new Pool[(String, Int), Partition](valueFactory = Some { case (t, p) =>
+  //保存了当前broker上分配的所有partition
+  private val allPartitions : Pool[(String, Int), Partition] = new Pool[(String, Int), Partition](valueFactory = Some { case (t, p) =>
     new Partition(t, p, time, this)
   })
   private val replicaStateChangeLock = new Object
+  //todo 管理多个ReplicaFetcherThread线程，ReplicaFetcherThread线程会向leader副本发送FetchRequest请求来获取消息，
+  // 实现folloer副本与leader副本同步
   val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime, threadNamePrefix, quotaManager)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
-  val highWatermarkCheckpoints = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
+  //缓存每个log目录跟OffsetCheckpoint之间的对应关系
+  //OffsetCheckpoint记录了log目录下的replication-offset-checkpoint文件，
+  val highWatermarkCheckpoints: Predef.Map[String, OffsetCheckpoint] = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
   private var hwThreadInitialized = false
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
   val stateChangeLogger = KafkaController.stateChangeLogger
+  //用于记录ISR集合发生变化的分区信息
   private val isrChangeSet: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
   private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
   private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
 
+  //管理delayedproduce
   val delayedProducePurgatory = DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
+  //管理delayedfench
   val delayedFetchPurgatory = DelayedOperationPurgatory[DelayedFetch](
     purgatoryName = "Fetch", config.brokerId, config.fetchPurgatoryPurgeIntervalRequests)
 
@@ -345,7 +356,7 @@ class ReplicaManager(val config: KafkaConfig,
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
         //todo kafka服务端在处理客户端的一些请求时，如果不能及时返回相应给客户端
         //todo 会在服务端创建一个延迟操作对象delayedOperation,并放在延迟缓存中 delayedOperationPurgatory
-        //todo 延迟操作有很多种，延迟的生产，延迟的相应，延迟的加入，延迟的心跳
+        //todo 延迟操作有很多种，延迟的生产，延迟的响应，延迟的加入，延迟的心跳
         //todo 创建delayedProduce对象，超过timeout时间后这个操作会被认定为超时，并立即返回，发送响应给客户端
         val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
         // todo 遍历有哪些topic需要检测延迟操作是否完成
@@ -354,6 +365,7 @@ class ReplicaManager(val config: KafkaConfig,
         // try to complete the request immediately, otherwise put it into the purgatory
         // this is because while the delayed produce operation is being created, new
         // requests may arrive and hence make this operation completable.
+        // Purgatory 炼狱的意思
         //尝试执行delayedProduce 的 tryComplete,执行成则返回，失败则加入到哈希定时器
         delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
       } else {

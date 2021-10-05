@@ -43,22 +43,21 @@ class Partition(val topic: String,
                 val partitionId: Int,
                 time: Time,
                 replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
+  //当前broker的id
   private val localBrokerId = replicaManager.config.brokerId
   private val logManager = replicaManager.logManager
   private val zkUtils = replicaManager.zkUtils
+  //维护了该分区的全部副本集合
   private val assignedReplicaMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock()
   private var zkVersion: Int = LeaderAndIsr.initialZKVersion
   @volatile private var leaderEpoch: Int = LeaderAndIsr.initialLeaderEpoch - 1
   @volatile var leaderReplicaIdOpt: Option[Int] = None
+  //维护了该分区的ISR集合
   @volatile var inSyncReplicas: Set[Replica] = Set.empty[Replica]
 
-  /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
-   * One way of doing that is through the controller's start replica state change command. When a new broker starts up
-   * the controller sends it a start replica command containing the leader for each partition that the broker hosts.
-   * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
-   * each partition. */
+  //
   private var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   this.logIdent = "Partition [%s,%d] on broker %d: ".format(topic, partitionId, localBrokerId)
 
