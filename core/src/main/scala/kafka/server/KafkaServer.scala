@@ -219,12 +219,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         socketServer = new SocketServer(config, metrics, kafkaMetricsTime)
         socketServer.startup()
 
-        /* start replica manager */
+        //todo 副本管理器
         replicaManager = new ReplicaManager(config, metrics, time, kafkaMetricsTime, zkUtils, kafkaScheduler, logManager,
           isShuttingDown, quotaManagers.follower)
         replicaManager.startup()
 
-        //创建kafka控制器
+        //todo 创建kafka控制器  threadNamePrefix 默认是None
         kafkaController = new KafkaController(config, zkUtils, brokerState, kafkaMetricsTime, metrics, threadNamePrefix)
         kafkaController.startup()
 
@@ -375,7 +375,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           metrics,
           kafkaMetricsTime,
           "kafka-server-controlled-shutdown",
-          Map.empty.asJava,
+          null,
           false,
           channelBuilder
         )

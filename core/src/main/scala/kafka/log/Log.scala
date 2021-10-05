@@ -586,7 +586,7 @@ class Log(val dir: File,//Log对应的磁盘文件
           entry.getValue.size
         }
       }
-      //读取消息
+      //todo 读取消息 entry.getValue = LogSegment  LogSegment#read
       val fetchInfo = entry.getValue.read(startOffset, maxOffset, maxLength, maxPosition, minOneMessage)
       //在此Logsegment中没读到数据，则继续读取下一个Logsegment
       if(fetchInfo == null) {

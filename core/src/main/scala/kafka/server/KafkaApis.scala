@@ -373,10 +373,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicPartition, _) => authorize(request.session, Write, new Resource(auth.Topic, topicPartition.topic))
     }
 
-    // the callback for sending a produce response
+    //回调函数
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
-
-      val mergedResponseStatus = responseStatus ++ 
+      //把未授权的topic ,未知的topic 融合到一块
+      val mergedResponseStatus = responseStatus ++
         unauthorizedForWriteRequestInfo.mapValues(_ =>
            new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp)) ++ 
         nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => 
@@ -414,6 +414,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestChannel.noOperation(request.processor, request)
           }
         } else {
+          //正常流程
           val respHeader = new ResponseHeader(request.header.correlationId)
           val respBody = request.header.apiVersion match {
             case 0 => new ProduceResponse(mergedResponseStatus.asJava)
@@ -452,7 +453,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         case (topicPartition, buffer) => (topicPartition, new ByteBufferMessageSet(buffer))
       }
 
-      // ReplicaManager 主要是管理一个broker范围内的Partition
+      //todo ReplicaManager 主要是管理一个broker范围内的Partition
+      // 整体流程如下
+      // ReplicaManager#appendMessages -> ReplicaManager#appendToLocalLog
+      // -> Partition#appendMessagesToLeader -> Log#append -> #LogSegment#append
+      // -> FileMessageSet#append
       replicaManager.appendMessages(
         produceRequest.timeout.toLong,
         produceRequest.acks,
@@ -489,6 +494,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     // the callback for sending a fetch response
+    //todo 拉取消息响应回调
     def sendResponseCallback(responsePartitionData: Seq[(TopicAndPartition, FetchResponsePartitionData)]) {
 
       val convertedPartitionData =
@@ -550,6 +556,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedRequestInfo.isEmpty)
       sendResponseCallback(Seq.empty)
     else {
+      //todo
       // call the replica manager to fetch messages from the local replica
       replicaManager.fetchMessages(
         fetchRequest.maxWait.toLong,
@@ -1211,11 +1218,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseCallback(results)
     } else if (!authorize(request.session, Create, Resource.ClusterResource)) {
+      //topic 没授权
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
         (topic, Errors.CLUSTER_AUTHORIZATION_FAILED)
       }
       sendResponseCallback(results)
     } else {
+      //todo
       val (validTopics, duplicateTopics) = createTopicsRequest.topics.asScala.partition { case (topic, _) =>
         !createTopicsRequest.duplicateTopics.contains(topic)
       }

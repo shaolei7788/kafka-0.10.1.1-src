@@ -170,6 +170,7 @@ public class InternalTopicManager {
     private void createTopic(InternalTopicConfig topic, int numPartitions, int replicationFactor) throws ZkNodeExistsException {
         log.debug("Creating topic {} with {} partitions from ZK in partition assignor.", topic.name(), numPartitions);
         ObjectMapper mapper = new ObjectMapper();
+        //todo 获取所有的broker
         List<Integer> brokers = getBrokers();
         int numBrokers = brokers.size();
         if (numBrokers < replicationFactor) {

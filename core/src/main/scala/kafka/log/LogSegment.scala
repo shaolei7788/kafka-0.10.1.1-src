@@ -179,8 +179,9 @@ class LogSegment(val log: FileMessageSet,
         // when the leader of a partition changes, it's possible for the new leader's high watermark to be less than the
         // true high watermark in the previous leader for a short window. In this window, if a consumer fetches on an
         // offset between new leader's high watermark and the log end offset, we want to return an empty response.
-        if (offset < startOffset)
+        if (offset < startOffset) {
           return FetchDataInfo(offsetMetadata, MessageSet.Empty, firstMessageSetIncomplete = false)
+        }
         val mapping = translateOffset(offset, startPosition.position)
         val endPosition =
           if (mapping == null)
@@ -189,7 +190,7 @@ class LogSegment(val log: FileMessageSet,
             mapping._1.position
         min(min(maxPosition, endPosition) - startPosition.position, adjustedMaxSize).toInt
     }
-
+    //todo FetchDataInfo  样例类 log.read
     FetchDataInfo(offsetMetadata, log.read(startPosition.position, length),
       firstMessageSetIncomplete = adjustedMaxSize < messageSetSize)
   }
